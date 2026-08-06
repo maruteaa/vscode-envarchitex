@@ -324,7 +324,7 @@ export class AutoSyncCoordinator implements vscode.Disposable {
     if (/^-?\d+(\.\d+)?$/.test(raw)) {
       return 'number';
     }
-    if (/^(true|false|True|False)$/.test(raw)) {
+    if (/^(true|false|True|False|TRUE|FALSE)$/.test(raw)) {
       return 'boolean';
     }
     return 'string';
@@ -377,7 +377,7 @@ export class AutoSyncCoordinator implements vscode.Disposable {
   private async withMutex(uri: vscode.Uri, fn: () => Promise<void>): Promise<void> {
     const key = uri.toString();
     const prev = this.mutexes.get(key) ?? Promise.resolve();
-    let release: () => void = () => {};
+    let release: () => void = () => { };
     const next = new Promise<void>((resolve) => {
       release = resolve;
     });
