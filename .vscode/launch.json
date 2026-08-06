@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "skipFiles": [
+        "<node_internals>/**",
+        "**/node_modules/**",
+        "${env:LOCALAPPDATA}/Programs/Microsoft VS Code/**",
+        "${env:APPDATA}/Code/**",
+        "${env:USERPROFILE}/.vscode/**"
+      ],
+      "preLaunchTask": "${defaultBuildTask}"
+    }
+  ]
+}
