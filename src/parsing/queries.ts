@@ -100,8 +100,8 @@ const PHP_QUERY = `
 
 ;; $_ENV['VAR'] or $_SERVER['VAR']
 (subscript_expression
-  callable: (variable_name (name) @_var (#match? @_var "^(_ENV|_SERVER)$"))
-  index: (string) @var_name_string) @ref
+  (variable_name (name) @_var (#match? @_var "^(_ENV|_SERVER)$"))
+  (string) @var_name_string) @ref
 `;
 
 const GO_QUERY = `
@@ -118,18 +118,21 @@ const GO_QUERY = `
 const RUBY_QUERY = `
 ;; ENV['VAR']
 (element_reference
-  object: (constant) @_env (#eq? @_env "ENV")
-  (argument_list (string) @var_name_string)) @ref
+  object: (constant) @_env
+  (argument_list (string) @var_name_string)
+  (#eq? @_env "ENV")) @ref
 
 ;; ENV.fetch('VAR') or ENV.fetch('VAR', 'default')
 (call
-  receiver: (constant) @_env2 (#eq? @_env2 "ENV")
-  method: (identifier) @_fetch (#eq? @_fetch "fetch")
+  receiver: (constant) @_env2
+  method: (identifier) @_fetch
   arguments: (argument_list
     .
     (string) @var_name_string
     .
-    (_)? @default_value)) @ref
+    (_)? @default_value)
+  (#eq? @_env2 "ENV")
+  (#eq? @_fetch "fetch")) @ref
 `;
 
 const JAVA_QUERY = `

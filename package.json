@@ -49,6 +49,10 @@
         "title": "EnvArchitex: Re-scan workspace"
       },
       {
+        "command": "envarchitex.syncWorkspace",
+        "title": "EnvArchitex: Sync all workspace files"
+      },
+      {
         "command": "envarchitex.toggleSyncMode",
         "title": "EnvArchitex: Toggle auto/manual sync"
       },

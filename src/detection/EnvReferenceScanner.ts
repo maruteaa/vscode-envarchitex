@@ -9,6 +9,7 @@ export interface EnvReference {
   range: vscode.Range;
   uri: vscode.Uri;
   inferredType: EnvType;
+  defaultValue?: string;
 }
 
 export interface ScanResult {
@@ -42,7 +43,7 @@ export class EnvReferenceScanner {
     try {
       const matches = bundle.query.matches(tree.rootNode);
       const inferred = new Map<string, EnvType>();
-      const provisional: { key: string; range: vscode.Range; localType: EnvType }[] = [];
+      const provisional: { key: string; range: vscode.Range; localType: EnvType; defaultValue?: string }[] = [];
 
       for (const match of matches) {
         let refNode: Node | null = null;
@@ -71,10 +72,17 @@ export class EnvReferenceScanner {
           ? this.inference.infer(refNode, defaultValueNode, tag)
           : 'string';
         inferred.set(rawKey, this.inference.aggregate(inferred.get(rawKey), localType));
+        
+        let defaultValue: string | undefined = undefined;
+        if (defaultValueNode) {
+          defaultValue = stripStringQuotes(defaultValueNode.text);
+        }
+
         provisional.push({
           key: rawKey,
           range: this.rangeOf(refNode),
-          localType
+          localType,
+          defaultValue
         });
       }
 
@@ -82,7 +90,8 @@ export class EnvReferenceScanner {
         key: p.key,
         range: p.range,
         uri: document.uri,
-        inferredType: inferred.get(p.key) ?? 'string'
+        inferredType: inferred.get(p.key) ?? 'string',
+        defaultValue: p.defaultValue
       }));
 
       this.output.appendLine(

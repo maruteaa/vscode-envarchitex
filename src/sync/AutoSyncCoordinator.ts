@@ -153,7 +153,12 @@ export class AutoSyncCoordinator implements vscode.Disposable {
           }
           seen.add(ref.key);
           if (!this.workspace.hasKeyInFile(folder.uri.fsPath, target, ref.key)) {
-            missing.push({ key: ref.key, type: ref.inferredType });
+            missing.push({
+              key: ref.key,
+              type: ref.inferredType,
+              defaultValue: ref.defaultValue,
+              sourceBasename: path.basename(document.uri.fsPath)
+            });
           }
         }
         if (missing.length === 0) {

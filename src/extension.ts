@@ -133,10 +133,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('envarchitex.scanWorkspace', async () => {
       output.appendLine('[cmd] envarchitex.scanWorkspace invoked');
-      for (const editor of vscode.window.visibleTextEditors) {
-        await orchestrator.refreshDocument(editor.document);
+      const docs = await getWorkspaceSourceDocuments(output);
+      for (const doc of docs) {
+        await orchestrator.refreshDocument(doc);
       }
-      void vscode.window.showInformationMessage('EnvArchitex: workspace re-scan complete.');
+      void vscode.window.showInformationMessage(`EnvArchitex: scanned ${docs.length} workspace file(s).`);
+    }),
+    vscode.commands.registerCommand('envarchitex.syncWorkspace', async () => {
+      output.appendLine('[cmd] envarchitex.syncWorkspace invoked');
+      const docs = await getWorkspaceSourceDocuments(output);
+      await coordinator.runSyncForWorkspace(docs);
+      void vscode.window.showInformationMessage(`EnvArchitex: synced ${docs.length} workspace file(s).`);
     }),
     vscode.commands.registerCommand('envarchitex.toggleSyncMode', async () => {
       const next = settings.syncMode === 'auto' ? 'manual' : 'auto';
@@ -217,4 +224,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   /* disposables on subscriptions */
+}
+
+async function getWorkspaceSourceDocuments(output: vscode.OutputChannel): Promise<vscode.TextDocument[]> {
+  const pattern = '**/*.{js,jsx,ts,tsx,py,rs,php,go,rb,java,cs,cpp,c,h,hpp}';
+  const exclude = '{**/node_modules/**,**/.venv/**,**/dist/**,**/build/**,**/out/**,**/target/**,**/vendor/**,**/.git/**}';
+  const uris = await vscode.workspace.findFiles(pattern, exclude);
+  output.appendLine(`[workspace] found ${uris.length} source file(s) matching patterns`);
+  const docs: vscode.TextDocument[] = [];
+  for (const uri of uris) {
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      docs.push(doc);
+    } catch (err) {
+      output.appendLine(`[workspace] failed to open ${uri.fsPath}: ${err}`);
+    }
+  }
+  return docs;
 }
