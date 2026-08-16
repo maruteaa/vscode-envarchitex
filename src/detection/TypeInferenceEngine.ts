@@ -5,14 +5,19 @@ export type EnvType = 'string' | 'number' | 'boolean';
 
 const NUMBER_FN_JS = new Set(['parseInt', 'parseFloat', 'Number']);
 const BOOLEAN_FN_JS = new Set(['Boolean']);
-const BOOLEAN_LITERAL_JS = new Set(['true', 'false', '"true"', "'true'", '"false"', "'false'"]);
+const BOOLEAN_LITERAL_JS = new Set([
+  'true', 'false', 'True', 'False', 'TRUE', 'FALSE',
+  '"true"', '"false"', '"True"', '"False"', '"TRUE"', '"FALSE"',
+  "'true'", "'false'", "'True'", "'False'", "'TRUE'", "'FALSE'"
+]);
 
 const NUMBER_FN_PY = new Set(['int', 'float']);
 const BOOLEAN_FN_PY = new Set(['bool']);
 const BOOLEAN_LITERAL_PY = new Set([
   "'true'", '"true"', "'false'", '"false"',
   "'True'", '"True"', "'False'", '"False"',
-  'True', 'False'
+  "'TRUE'", '"TRUE"', "'FALSE'", '"FALSE"',
+  'True', 'False', 'TRUE', 'FALSE', 'true', 'false'
 ]);
 
 const MAX_PARENT_DEPTH = 4;
@@ -24,7 +29,7 @@ const NUMBER_FN_GO = new Set(['Atoi', 'ParseInt', 'ParseFloat']);
 const BOOLEAN_FN_GO = new Set(['ParseBool']);
 
 const NUMBER_FN_JAVA = new Set(['parseInt', 'parseDouble', 'parseFloat', 'parseLong', 'valueOf']);
-const BOOLEAN_FN_JAVA = new Set(['parseBoolean', 'valueOf']);
+const BOOLEAN_FN_JAVA = new Set(['parseBoolean', 'valueOf', 'equalsIgnoreCase', 'equals']);
 
 const NUMBER_FN_CSHARP = new Set(['Parse', 'ToInt32', 'ToDouble', 'ToSingle', 'ToInt64']);
 const BOOLEAN_FN_CSHARP = new Set(['Parse', 'ToBoolean']);
@@ -35,20 +40,30 @@ export class TypeInferenceEngine {
   infer(refNode: Node, defaultValueNode: Node | null, tag: GrammarTag): EnvType {
     switch (tag) {
       case 'python': {
-        const fromDefault = this.inferFromPythonDefault(defaultValueNode);
+        const fromDefault = this.inferFromDefaultValue(defaultValueNode);
         if (fromDefault) {
           return fromDefault;
         }
         return this.inferPython(refNode);
       }
+      case 'ruby': {
+        const fromDefault = this.inferFromDefaultValue(defaultValueNode);
+        if (fromDefault) {
+          return fromDefault;
+        }
+        return this.inferRuby(refNode);
+      }
+      case 'php': {
+        const fromDefault = this.inferFromDefaultValue(defaultValueNode);
+        if (fromDefault) {
+          return fromDefault;
+        }
+        return this.inferGeneric(refNode, NUMBER_FN_PHP, BOOLEAN_FN_PHP);
+      }
       case 'rust':
         return this.inferGeneric(refNode, new Set(['parse']), new Set());
-      case 'php':
-        return this.inferGeneric(refNode, NUMBER_FN_PHP, BOOLEAN_FN_PHP);
       case 'go':
         return this.inferGeneric(refNode, NUMBER_FN_GO, BOOLEAN_FN_GO);
-      case 'ruby':
-        return this.inferRuby(refNode);
       case 'java':
         return this.inferGeneric(refNode, NUMBER_FN_JAVA, BOOLEAN_FN_JAVA);
       case 'c-sharp':
@@ -63,27 +78,74 @@ export class TypeInferenceEngine {
   private inferGeneric(refNode: Node, numFns: Set<string>, boolFns: Set<string>): EnvType {
     let node: Node | null = refNode.parent;
     for (let depth = 0; depth < MAX_PARENT_DEPTH && node; depth++, node = node.parent) {
-      const text = node.text;
-      for (const fn of numFns) {
-        if (text.includes(fn)) {
-          return 'number';
+      const t = node.type;
+      // Check for direct function call wrapping
+      if (t === 'call_expression' || t === 'method_invocation' || t === 'invocation_expression') {
+        const fnNode = node.childForFieldName('function') || node.childForFieldName('name');
+        if (fnNode) {
+          const fnName = this.extractFunctionName(fnNode);
+          if (fnName && numFns.has(fnName)) {
+            return 'number';
+          }
+          if (fnName && boolFns.has(fnName)) {
+            return 'boolean';
+          }
         }
       }
-      for (const fn of boolFns) {
-        if (text.includes(fn)) {
+      // Check for comparison with boolean-like values
+      if (t === 'binary_expression') {
+        const op = this.binaryOp(node);
+        if (op === '==' || op === '!=' || op === '===' || op === '!==') {
           return 'boolean';
+        }
+      }
+      // Check for type cast expressions (e.g., PHP `(int)`, Go type conversion)
+      if (t === 'cast_expression') {
+        const typeNode = node.childForFieldName('type');
+        if (typeNode) {
+          const typeName = typeNode.text.toLowerCase();
+          if (typeName.includes('int') || typeName.includes('float') || typeName.includes('double') || typeName.includes('long')) {
+            return 'number';
+          }
+          if (typeName.includes('bool') || typeName.includes('boolean')) {
+            return 'boolean';
+          }
         }
       }
     }
     return 'string';
   }
 
+  private extractFunctionName(fnNode: Node): string | null {
+    if (fnNode.type === 'identifier') {
+      return fnNode.text;
+    }
+    if (fnNode.type === 'selector_expression' || fnNode.type === 'member_expression' || fnNode.type === 'member_access_expression') {
+      const field = fnNode.childForFieldName('field') || fnNode.childForFieldName('property') || fnNode.childForFieldName('name');
+      return field ? field.text : null;
+    }
+    if (fnNode.type === 'scoped_identifier' || fnNode.type === 'qualified_identifier') {
+      const name = fnNode.childForFieldName('name');
+      return name ? name.text : null;
+    }
+    return fnNode.text;
+  }
+
   private inferRuby(refNode: Node): EnvType {
     let node: Node | null = refNode.parent;
     for (let depth = 0; depth < MAX_PARENT_DEPTH && node; depth++, node = node.parent) {
-      const text = node.text;
-      if (text.includes('.to_i') || text.includes('.to_f')) {
-        return 'number';
+      const t = node.type;
+      if (t === 'call') {
+        const methodNode = node.childForFieldName('method');
+        if (methodNode && (methodNode.text === 'to_i' || methodNode.text === 'to_f')) {
+          return 'number';
+        }
+      }
+      if (t === 'binary') {
+        const op = this.binaryOp(node);
+        if (op === '==' || op === '!=') {
+          return 'boolean';
+        }
       }
     }
     return 'string';
@@ -195,18 +257,22 @@ export class TypeInferenceEngine {
     return 'string';
   }
 
-  private inferFromPythonDefault(node: Node | null): EnvType | null {
+  private inferFromDefaultValue(node: Node | null): EnvType | null {
     if (!node) {
       return null;
     }
     const t = node.type;
-    if (t === 'integer' || t === 'float') {
+    if (t === 'integer' || t === 'float' || t === 'number') {
       return 'number';
     }
-    if (t === 'true' || t === 'false' || t === 'True' || t === 'False') {
+    if (t === 'true' || t === 'false' || t === 'True' || t === 'False' || t === 'TRUE' || t === 'FALSE' || t === 'boolean') {
       return 'boolean';
     }
-    if (t === 'string') {
+    if (t === 'string' || t === 'string_literal' || t === 'interpreted_string_literal' || t === 'simple_symbol') {
+      const text = node.text;
+      if (BOOLEAN_LITERAL_JS.has(text) || BOOLEAN_LITERAL_PY.has(text)) {
+        return 'boolean';
+      }
       return 'string';
     }
     return null;

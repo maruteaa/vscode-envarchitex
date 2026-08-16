@@ -155,9 +155,7 @@ export class AutoSyncCoordinator implements vscode.Disposable {
           if (!this.workspace.hasKeyInFile(folder.uri.fsPath, target, ref.key)) {
             missing.push({
               key: ref.key,
-              type: ref.inferredType,
-              defaultValue: ref.defaultValue,
-              sourceBasename: path.basename(document.uri.fsPath)
+              type: ref.inferredType
             });
           }
         }

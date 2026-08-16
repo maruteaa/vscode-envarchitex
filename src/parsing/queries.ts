@@ -81,11 +81,33 @@ const PYTHON_QUERY = `
 const RUST_QUERY = `
 ;; std::env::var("VAR") or env::var("VAR") or std::env::var_os("VAR")
 (call_expression
-  function: [
-    (scoped_identifier name: (identifier) @_fn (#match? @_fn "^(var|var_os)$"))
-    (identifier) @_fn2 (#match? @_fn2 "^(var|var_os)$")
-  ]
-  arguments: (arguments . (string_literal) @var_name_string)) @ref
+  function: (scoped_identifier
+    name: (identifier) @_fn
+    (#match? @_fn "^(var|var_os)$"))
+  arguments: (arguments
+    (string_literal) @var_name_string)) @ref
+
+;; standalone var("VAR") or var_os("VAR")
+(call_expression
+  function: (identifier) @_fn2
+  (#match? @_fn2 "^(var|var_os)$")
+  arguments: (arguments
+    (string_literal) @var_name_string)) @ref
+
+;; raw string: std::env::var(r#"VAR"#)
+(call_expression
+  function: (scoped_identifier
+    name: (identifier) @_fn3
+    (#match? @_fn3 "^(var|var_os)$"))
+  arguments: (arguments
+    (raw_string_literal) @var_name_string)) @ref
+
+;; standalone raw string: var(r#"VAR"#)
+(call_expression
+  function: (identifier) @_fn4
+  (#match? @_fn4 "^(var|var_os)$")
+  arguments: (arguments
+    (raw_string_literal) @var_name_string)) @ref
 `;
 
 const PHP_QUERY = `
@@ -94,14 +116,13 @@ const PHP_QUERY = `
   function: (name) @_fn (#match? @_fn "^(getenv|env)$")
   arguments: (arguments
     .
-    (argument (string) @var_name_string)
-    .
+    (argument [(string) (encapsed_string)] @var_name_string)
     (argument)? @default_value)) @ref
 
 ;; $_ENV['VAR'] or $_SERVER['VAR']
 (subscript_expression
   (variable_name (name) @_var (#match? @_var "^(_ENV|_SERVER)$"))
-  (string) @var_name_string) @ref
+  [(string) (encapsed_string)] @var_name_string) @ref
 `;
 
 const GO_QUERY = `
@@ -118,8 +139,8 @@ const GO_QUERY = `
 const RUBY_QUERY = `
 ;; ENV['VAR']
 (element_reference
-  object: (constant) @_env
-  (argument_list (string) @var_name_string)
+  (constant) @_env
+  (string) @var_name_string
   (#eq? @_env "ENV")) @ref
 
 ;; ENV.fetch('VAR') or ENV.fetch('VAR', 'default')
@@ -156,7 +177,7 @@ const CSHARP_QUERY = `
 (invocation_expression
   function: (member_access_expression
     name: (identifier) @_fn (#eq? @_fn "GetEnvironmentVariable"))
-  arguments: (argument_list . (argument (string_literal) @var_name_string))) @ref
+  arguments: (argument_list . (argument [(string_literal) (verbatim_string_literal)] @var_name_string))) @ref
 `;
 
 const CPP_QUERY = `
