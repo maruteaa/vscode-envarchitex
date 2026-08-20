@@ -4,7 +4,7 @@ A VS Code extension that uses **Tree-sitter AST analysis** to detect references 
 
 ## Table of Contents
 
-- [Why EnvArchitex?](#why-envarchitex)
+- [EnvArchitex](#envarchitex)
 - [Features](#features)
   - [AST-Based Detection](#ast-based-detection)
   - [Supported Languages & Patterns](#supported-languages--patterns)
@@ -22,7 +22,7 @@ A VS Code extension that uses **Tree-sitter AST analysis** to detect references 
 
 ---
 
-## Why EnvArchitex?
+## EnvArchitex
 
 Most projects have a `.env` file containing secrets, and a `.env.example` (or `.env.sample`) that is committed to version control so team members know which variables are needed. Keeping these files in sync manually is tedious and error-prone:
 
@@ -206,10 +206,10 @@ All settings live under the `envarchitex` namespace. Open **Settings** (`Ctrl+,`
 ## How It Works
 
 ```
-┌─────────────┐    ┌───────────────┐    ┌──────────────────┐    ┌────────────────┐
-│ Source File  │───▶│ ParserManager │───▶│ EnvReference     │───▶│ TypeInference  │
-│ (JS/TS/Py…) │    │ (Tree-sitter) │    │ Scanner          │    │ Engine         │
-└─────────────┘    └───────────────┘    └──────────────────┘    └────────────────┘
+┌─────────────┐     ┌───────────────┐     ┌──────────────────┐      ┌────────────────┐
+│ Source File │───▶│ ParserManager  │───▶│ EnvReference     │───▶ │ TypeInference  │
+│ (JS/TS/Py…) │     │ (Tree-sitter) │     │ Scanner          │      │ Engine         │
+└─────────────┘     └───────────────┘     └──────────────────┘      └────────────────┘
                                                │                       │
                                                │ EnvReference[]        │ EnvType
                                                ▼                       ▼
