@@ -203,42 +203,6 @@ All settings live under the `envarchitex` namespace. Open **Settings** (`Ctrl+,`
 
 ---
 
-## How It Works
-
-```
-┌─────────────┐     ┌───────────────┐     ┌──────────────────┐      ┌────────────────┐
-│ Source File │───▶│ ParserManager  │───▶│ EnvReference     │───▶ │ TypeInference  │
-│ (JS/TS/Py…) │     │ (Tree-sitter) │     │ Scanner          │      │ Engine         │
-└─────────────┘     └───────────────┘     └──────────────────┘      └────────────────┘
-                                               │                       │
-                                               │ EnvReference[]        │ EnvType
-                                               ▼                       ▼
-                   ┌───────────────┐    ┌──────────────────┐    ┌────────────────┐
-                   │ EnvWorkspace  │◀───│ Diagnostic       │    │ AutoSync       │
-                   │ (key tracking)│    │ Orchestrator     │    │ Coordinator    │
-                   └───────────────┘    └──────────────────┘    └────────────────┘
-                          │                    │                       │
-                          │              Diagnostics &           File writes
-                          │              Quick Fixes                  │
-                          ▼                    ▼                       ▼
-                   ┌───────────────┐    ┌──────────────────┐    ┌────────────────┐
-                   │ .env          │    │ Editor squiggles │    │ .env.example   │
-                   │ .env.prod     │    │ & lightbulb menu │    │ .env.sample    │
-                   └───────────────┘    └──────────────────┘    └────────────────┘
-```
-
-1. **ParserManager** loads Tree-sitter WASM grammars on-demand and caches them. Each grammar is only loaded when a file of that language is first opened.
-2. **EnvReferenceScanner** runs Tree-sitter queries against the AST to extract all environment variable references, including their key names, source locations, and (optionally) default values.
-3. **TypeInferenceEngine** walks the AST upward from each reference to determine whether the variable is used as a `string`, `number`, or `boolean`.
-4. **EnvWorkspace** watches all tracked env files (`.env`, `.env.example`, etc.) on disk via `FileSystemWatcher`, maintaining an in-memory index of which keys exist in which file.
-5. **DiagnosticOrchestrator** compares detected references against the key index and produces editor diagnostics.
-6. **EnvCodeActionProvider** generates Quick Fix actions for each diagnostic.
-7. **AutoSyncCoordinator** handles the three-way sync logic with debouncing (300 ms), dirty-file detection, and per-file mutex locking to prevent concurrent writes.
-8. **EnvExampleWriter** appends new variables under a `# Added by EnvArchitex` header section, preserving existing file content and formatting.
-9. **EnvFileParser** is a line-by-line parser for `.env` files that handles quoted values, inline comments, `export` prefixes, and escaped characters.
-
----
-
 ## Building from Source
 
 ```bash
@@ -253,52 +217,3 @@ npm run watch
 ```
 
 Press **F5** in VS Code to launch an Extension Development Host with the extension loaded.
-
-
-## Known Limitations & Weaknesses
-
-### Detection Limitations
-
-- **Only idiomatic patterns are detected.** The Tree-sitter queries match specific, standard access patterns (e.g. `process.env.VAR`, `os.Getenv("VAR")`). Non-standard wrappers, custom helper functions (e.g. `getConfig("VAR")`), or framework-specific utilities (e.g. Vite's `import.meta.env.VAR`, Next.js `NEXT_PUBLIC_*` via bundler injection, `dotenv.config()` return values) are **not** detected.
-
-- **Dynamic key names are invisible.** Variables accessed via computed keys — such as `process.env[someVariable]`, `os.environ.get(key)`, or `os.Getenv(configMap[name])` — cannot be detected because the key name is not a static string literal in the AST.
-
-- **No cross-file or import-chain tracking.** If a variable is defined in one module and re-exported or passed as a parameter to another, only the file containing the actual env access call is scanned. There is no data-flow analysis across module boundaries.
-
-- **String concatenation / template literals are not resolved.** Patterns like `` process.env[`PREFIX_${name}`] `` are not matched.
-
-### Type Inference Limitations
-
-- **Heuristic-based, not type-system-based.** Type inference walks the AST looking for recognizable function wrappers and operators. It does **not** use TypeScript's type checker, Python's type annotations, or any language server. This means some patterns may be missed or misidentified.
-
-- **Limited parent depth.** The inference engine walks only **4 levels** up the AST tree. Deeply nested expressions like `someFunc(otherFunc(parseInt(process.env.PORT)))` may not be reached.
-
-- **Ambiguity with shared function names.** In Java and C#, some function names like `Parse` and `valueOf` appear in both numeric and boolean contexts. The engine may resolve these incorrectly depending on which AST branch it encounters first.
-
-- **No inference for C/C++ booleans or Rust booleans.** The extension does not detect boolean usage patterns in C, C++, or Rust — all variables default to `string` unless a numeric conversion function is found.
-
-- **Aggregation may mask nuance.** When the same variable is used as both `number` and `boolean` across different files, the highest-precedence type (`boolean` > `number` > `string`) wins globally. This may not match every individual usage site.
-
-### Sync & Workspace Limitations
-
-- **Single-level file structure only.** Env files are matched by **basename** (e.g. `.env`, `.env.example`) and are expected to live in the **workspace folder root**. Nested env files (e.g. `packages/api/.env`) are not handled by the sync mapping system.
-
-- **No variable removal or cleanup.** If you remove an environment variable from your code, EnvArchitex will **not** remove it from `.env.example`. The extension only adds; it never deletes. Over time, template files may accumulate stale entries.
-
-- **No ordering or grouping.** Synced variables are appended to the end of the file under a `# Added by EnvArchitex` header. There is no support for sorting alphabetically, grouping by feature, or preserving any organizational structure.
-
-- **Dirty-file deferral without automatic retry.** If a target file has unsaved changes when a sync is triggered, the sync is deferred and a status bar hint is shown. However, there is no automatic retry once the file is saved — a new source file save is needed to re-trigger the sync.
-
-- **Workspace scan opens all source files.** The `Re-scan workspace` and `Sync all workspace files` commands use `vscode.workspace.openTextDocument()` for every matched file. In very large workspaces, this may be slow and memory-intensive.
-
-### General Limitations
-
-- **Requires Tree-sitter WASM grammars bundled in the extension.** If a grammar `.wasm` file is missing from the `dist/resources/` directory, that language will not be scanned, and a warning toast will appear once per session.
-
-- **No multi-root workspace awareness for sync mappings.** The sync mappings configuration is global. While the extension does iterate over all workspace folders, you cannot define different sync mappings for different workspace roots.
-
-- **No `.env` file format validation.** The env file parser is tolerant and may silently misparse edge cases with complex multiline values, heredoc syntax, or unusual escaping schemes.
-
-- **Diagnostics are file-scoped.** When multiple source files reference the same variable, each file independently produces diagnostics. Fixing the diagnostic in one file (via Quick Fix) does not immediately clear the diagnostic in others until those files are re-scanned.
-
-- **Glob matching is a simplified implementation.** The `DiagnosticOrchestrator` uses a custom glob-to-regex converter rather than a full glob library. Complex glob patterns with brace expansion or character classes may not behave as expected.
