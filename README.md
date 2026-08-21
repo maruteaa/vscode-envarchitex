@@ -16,9 +16,7 @@ A VS Code extension that uses **Tree-sitter AST analysis** to detect references 
   - [Status Bar](#status-bar)
 - [Commands](#commands)
 - [Settings Reference](#settings-reference)
-- [How It Works](#how-it-works)
 - [Building from Source](#building-from-source)
-- [Known Limitations & Weaknesses](#known-limitations--weaknesses)
 
 ---
 
